@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>AfreecaTV 임베드 코드 생성기</title>
+    <style>
+        /* 레이아웃 스타일 설정 */
+        #container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        #videoContainer {
+            flex: 1 1 640px;
+            min-width: 300px;
+            margin-right: 20px;
+            box-sizing: border-box;
+        }
+        #commentSection {
+            flex: 1 1 300px;
+            min-width: 300px;
+            display: none; /* 초기에는 댓글 섹션을 숨김 */
+            box-sizing: border-box;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            resize: none;
+            box-sizing: border-box;
+        }
+        .comment {
+            border-bottom: 1px solid #ccc;
+            padding: 10px 0;
+        }
+        .comment h4 {
+            margin: 0;
+            font-size: 14px;
+            color: #555;
+        }
+        .comment p {
+            margin: 5px 0 0;
+        }
+        #comments {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        button {
+            margin-top: 5px;
+        }
+        @media screen and (max-width: 800px) {
+            #container {
+                flex-direction: column;
+            }
+            #videoContainer, #commentSection {
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>AfreecaTV 임베드 코드 생성기</h1>
+    <input type="text" id="videoURL" placeholder="AfreecaTV 영상 링크를 입력하세요" size="50">
+    <button onclick="generateEmbedCode()">임베드 코드 생성</button>
+    <br><br>
+    <div id="embedCodeContainer" style="background-color: #f0f0f0; padding: 10px;"></div>
+    <br>
+    <div id="container">
+        <div id="videoContainer"></div>
+        <div id="commentSection">
+            <h2>댓글</h2>
+            <div id="comments"></div>
+            <textarea id="commentInput" placeholder="댓글을 입력하세요"></textarea>
+            <button onclick="addComment()">댓글 등록</button>
+        </div>
+    </div>
+
+    <script>
+        var videoPlayer;
+
+        function generateEmbedCode() {
+            var url = document.getElementById('videoURL').value;
+            var embedCodeContainer = document.getElementById('embedCodeContainer');
+            var videoContainer = document.getElementById('videoContainer');
+            var commentSection = document.getElementById('commentSection');
+
+            // VOD ID 추출
+            var vodIdMatch = url.match(/vod\.afreecatv\.com\/player\/(\d+)/);
+            if (vodIdMatch && vodIdMatch[1]) {
+                var vodId = vodIdMatch[1];
+
+                // 임베드 코드 생성
+                var embedUrl = 'https://vod.afreecatv.com/PLAYER/STATION/' + vodId;
+                var embedCode = '<iframe id="videoPlayer" src="' + embedUrl + '" width="640" height="360" frameborder="0" allowfullscreen></iframe>';
+
+                // 임베드 코드 표시
+                embedCodeContainer.innerText = embedCode;
+
+                // 미리보기 표시
+                videoContainer.innerHTML = embedCode;
+
+                // iframe 로드 완료 시 참조 저장
+                videoPlayer = document.getElementById('videoPlayer');
+
+                // 댓글 섹션 표시
+                commentSection.style.display = 'block';
+
+                // 댓글 섹션 초기화
+                document.getElementById('comments').innerHTML = '';
+                document.getElementById('commentInput').value = '';
+            } else {
+                embedCodeContainer.innerText = "올바른 AfreecaTV VOD 링크를 입력하세요.";
+                videoContainer.innerHTML = "";
+                commentSection.style.display = 'none'; // 잘못된 링크일 경우 댓글 섹션 숨김
+            }
+        }
+
+        function addComment() {
+            var commentInput = document.getElementById('commentInput');
+            var commentText = commentInput.value.trim();
+            if (commentText !== '') {
+                var commentsDiv = document.getElementById('comments');
+    
+                // 댓글 내용 이스케이프 및 줄바꿈 처리
+                var escapedComment = escapeHtml(commentText).replace(/\n/g, '<br>');
+    
+                // 댓글 내용에서 hh:mm:ss 형식의 시간 찾기 및 링크로 변환
+                var timestampedComment = escapedComment.replace(/(\b\d{1,2}:\d{2}:\d{2}\b)/g, function(match) {
+                    return '<a href="#" class="timestamp" data-time="' + match + '">' + match + '</a>';
+                });
+    
+                // 댓글 요소 생성
+                var newComment = document.createElement('div');
+                newComment.className = 'comment';
+    
+                var commentContent = `
+                    <h4>익명</h4>
+                    <p>${timestampedComment}</p>
+                `;
+                newComment.innerHTML = commentContent;
+    
+                // 댓글 추가
+                commentsDiv.appendChild(newComment);
+    
+                // 입력 필드 초기화
+                commentInput.value = '';
+    
+                // 타임스탬프 클릭 이벤트 추가
+                var timestamps = newComment.getElementsByClassName('timestamp');
+                for (var i = 0; i < timestamps.length; i++) {
+                    timestamps[i].addEventListener('click', function(event) {
+                        event.preventDefault();
+                        var timeString = this.getAttribute('data-time');
+                        alert('영상의 ' + timeString + ' 위치로 이동하려면 플레이어의 시점 조정 기능을 이용해주세요.');
+                    });
+                }
+            }
+        }
+
+        // 시간 문자열을 초 단위로 변환하는 함수
+        function parseTimeToSeconds(timeString) {
+            var parts = timeString.split(':');
+            var seconds = 0;
+            if (parts.length === 3) {
+                seconds += parseInt(parts[0]) * 3600; // 시
+                seconds += parseInt(parts[1]) * 60;   // 분
+                seconds += parseInt(parts[2]);        // 초
+            }
+            return seconds;
+        }
+
+        // 영상의 특정 시점으로 이동하는 함수
+        function seekVideo(seconds) {
+            // AfreecaTV iframe은 기본적으로 JavaScript API를 제공하지 않습니다.
+            // 따라서 iframe 내부의 영상을 제어하기 어렵습니다.
+            // 이 기능을 구현하려면 AfreecaTV에서 제공하는 API나 postMessage를 사용해야 합니다.
+            // 하지만 공식적인 API가 없으므로, 이 기능은 구현이 제한됩니다.
+
+            alert('아프리카TV 플레이어는 영상 시점 이동을 지원하지 않습니다.');
+        }
+
+        // XSS 방지를 위한 HTML 이스케이프 함수
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
